@@ -72,23 +72,30 @@ namespace streamer {
     }
 
     class ScopedGState {
+        bool lock;
         PyGILState_STATE gstate;
     public:
-        ScopedGState () {
-            gstate = PyGILState_Ensure();
+        ScopedGState (bool l = true): lock(l), gstate(PyGILState_UNLOCKED) {
+            if (lock) {
+                gstate = PyGILState_Ensure();
+            }
         }
         ~ScopedGState () {
-            PyGILState_Release(gstate);
+            if (lock) {
+                PyGILState_Release(gstate);
+            }
         }
     };
 
-    template <typename Loader>
-    class Streamer: public Loader {
-        typedef typename Loader::Task Task;
+    template <typename Task>
+    class Streamer {
 
         impl::TaskQueue<Task *> input_queue;
         impl::TaskQueue<py::object *> output_queue;
         boost::thread_group producer_threads, worker_threads;
+
+        virtual Task *stage1 (py::object *) = 0;
+        virtual py::object *stage2 (Task *task) = 0;
 
         void producer (py::object *next) {
             for (;;) {
@@ -102,7 +109,7 @@ namespace streamer {
                     delete next;
                     break;
                 }
-                input_queue.enqueue(Loader::stage1(obj));
+                input_queue.enqueue(stage1(obj));
             }
             input_queue.finish();
         }
@@ -111,7 +118,7 @@ namespace streamer {
             for (;;) {
                 Task *task;
                 if (!input_queue.dequeue(&task)) break;
-                output_queue.enqueue(Loader::stage2(task));
+                output_queue.enqueue(stage2(task));
             }
             output_queue.finish();
         }
