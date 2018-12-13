@@ -124,7 +124,7 @@ namespace streamer {
         }
 
     public:
-        Streamer (py::object gen, int workers, int depth=128)
+        Streamer (py::object gen, int workers, int depth=16)
             : input_queue(depth, 1),
             output_queue(depth, workers) {
 
